@@ -1,0 +1,263 @@
+// blokr backend Prisma schema.
+// Local dev runs against Docker Postgres (DATABASE_URL == DIRECT_URL).
+// Swapping to a pooled/managed Postgres later only requires setting DATABASE_URL to the
+// pooled connection string (port 6543, ?pgbouncer=true) and DIRECT_URL to the direct
+// connection string (port 5432) — no schema changes needed.
+//
+// NOTE: bookings also gets a hand-added partial unique index
+// (bookings_active_slot_unique) appended directly to the generated migration SQL —
+// see prisma/migrations/<timestamp>_init/migration.sql. Prisma's `@@unique` cannot
+// express a WHERE clause, so this is the one constraint that lives outside this file.
+// It enforces: only one HELD/PENDING_PAYMENT/CONFIRMED booking may occupy a given
+// (professionalId, date, startTime) at a time.
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  ADMIN
+  PROFESSIONAL
+  CUSTOMER
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum LocationType {
+  GOOGLE_MEET
+  ZOOM
+  PHYSICAL
+  WHATSAPP_CALL
+  PHONE_CALL
+}
+
+enum BookingStatus {
+  HELD
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ABANDONED
+  REFUNDED
+}
+
+enum PaymentChannel {
+  card
+  bank_transfer
+  ussd
+  apple_pay
+}
+
+// ---------- Identity ----------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role     @default(PROFESSIONAL)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  professionalProfile ProfessionalProfile?
+  refreshTokens       RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ---------- Professional profile ----------
+
+model ProfessionalProfile {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                     String
+  businessName             String
+  username                 String   @unique
+  bio                      String?
+  category                 String
+  avatarUrl                String?
+  timezone                 String   @default("Africa/Lagos (WAT)")
+  location                 String?
+  phone                    String
+  paystackSubaccountCode   String?
+  bankName                 String?
+  bankAccountNumber        String?
+  bankAccountName          String?
+  googleCalendarConnected  Boolean  @default(false)
+  googleCalendarEmail      String?
+  whatsappRemindersEnabled Boolean  @default(true)
+  rating                   Decimal  @default(0) @db.Decimal(2, 1)
+  reviewsCount             Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  services              Service[]
+  availabilityRules     AvailabilityRule[]
+  availabilityOverrides AvailabilityOverride[]
+  bookings              Booking[]
+  googleCalendarToken   GoogleCalendarToken?
+
+  @@index([userId])
+  @@map("professional_profiles")
+}
+
+model Service {
+  id                  String       @id @default(uuid())
+  professionalId      String
+  professional        ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  name                String
+  description         String?
+  durationMinutes     Int
+  priceKobo           Int
+  currency            String       @default("NGN")
+  bufferMinutes       Int          @default(0)
+  locationType        LocationType
+  meetingInstructions String?
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  bookings Booking[]
+
+  @@index([professionalId])
+  @@map("services")
+}
+
+model AvailabilityRule {
+  id             String    @id @default(uuid())
+  professionalId String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  dayOfWeek      DayOfWeek
+  isEnabled      Boolean   @default(true)
+  timeRanges     Json
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([professionalId, dayOfWeek])
+  @@index([professionalId])
+  @@map("availability_rules")
+}
+
+model AvailabilityOverride {
+  id             String    @id @default(uuid())
+  professionalId String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  date           DateTime  @db.Date
+  isAvailable    Boolean
+  timeRanges     Json?
+  reason         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([professionalId, date])
+  @@index([professionalId])
+  @@map("availability_overrides")
+}
+
+// ---------- Bookings & payments ----------
+
+model Booking {
+  id              String        @id @default(uuid())
+  reference       String        @unique
+  professionalId  String
+  professional    ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  serviceId       String
+  service         Service       @relation(fields: [serviceId], references: [id])
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  customerNotes   String?
+  date            DateTime      @db.Date
+  startTime       String
+  endTime         String
+  status          BookingStatus @default(HELD)
+  heldUntil       DateTime?
+  paymentStatus   PaymentStatus @default(PENDING)
+  amountKobo      Int
+  calendarEventId String?
+  meetingLink     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  paystackTransactions PaystackTransaction[]
+
+  @@index([professionalId])
+  @@index([serviceId])
+  @@index([professionalId, date])
+  @@map("bookings")
+}
+
+model PaystackTransaction {
+  id                String          @id @default(uuid())
+  bookingId         String
+  booking           Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reference         String          @unique
+  authorizationUrl  String?
+  accessCode        String?
+  amountKobo        Int
+  channel           PaymentChannel?
+  status            PaymentStatus   @default(PENDING)
+  paidAt            DateTime?
+  rawWebhookPayload Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([bookingId])
+  @@map("paystack_transactions")
+}
+
+// ---------- Integrations ----------
+
+model GoogleCalendarToken {
+  id             String   @id @default(uuid())
+  professionalId String   @unique
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  accessToken    String
+  refreshToken   String
+  scope          String
+  tokenType      String
+  expiryDate     DateTime
+  googleEmail    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("google_calendar_tokens")
+}
