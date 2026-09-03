@@ -10,6 +10,7 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import {
   AuthResponseDto,
@@ -49,6 +50,13 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @ApiOkResponse({ type: AuthResponseDto })
+  @Public()
+  @Post('google')
+  googleLogin(@Body() dto: GoogleLoginDto) {
+    return this.authService.googleLogin(dto.code);
   }
 
   @ApiOkResponse({ type: TokenPairDto })

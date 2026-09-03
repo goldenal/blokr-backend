@@ -75,7 +75,7 @@ enum PaymentChannel {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?
   name         String
   phone        String?
   role         Role     @default(PROFESSIONAL)
@@ -84,6 +84,7 @@ model User {
 
   professionalProfile ProfessionalProfile?
   refreshTokens       RefreshToken[]
+  googleCalendarToken GoogleCalendarToken?
 
   @@map("users")
 }
@@ -133,7 +134,6 @@ model ProfessionalProfile {
   availabilityRules     AvailabilityRule[]
   availabilityOverrides AvailabilityOverride[]
   bookings              Booking[]
-  googleCalendarToken   GoogleCalendarToken?
 
   @@index([userId])
   @@map("professional_profiles")
@@ -248,8 +248,8 @@ model PaystackTransaction {
 
 model GoogleCalendarToken {
   id             String   @id @default(uuid())
-  professionalId String   @unique
-  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken    String
   refreshToken   String
   scope          String

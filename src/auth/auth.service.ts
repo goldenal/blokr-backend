@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import type { User } from '@prisma/client';
+import { google } from 'googleapis';
 
 export type TokenPair = {
   accessToken: string;
@@ -69,7 +70,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid email or password.');
     }
     const passwordMatches = await bcrypt.compare(
@@ -81,6 +82,87 @@ export class AuthService {
     }
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), ...tokens };
+  }
+
+  async googleLogin(code: string): Promise<{ user: PublicUser } & TokenPair> {
+    try {
+      const client = new google.auth.OAuth2(
+        this.config.get<string>('GOOGLE_CLIENT_ID'),
+        this.config.get<string>('GOOGLE_CLIENT_SECRET'),
+        'postmessage', // required for popup flow
+      );
+
+      const { tokens } = await client.getToken(code);
+      client.setCredentials(tokens);
+
+      const oauth2 = google.oauth2({ auth: client, version: 'v2' });
+      const { data } = await oauth2.userinfo.get();
+      
+      const email = data.email;
+      const name = data.name || email?.split('@')[0] || 'User';
+
+      if (!email) {
+        throw new UnauthorizedException('No email returned from Google.');
+      }
+
+      let user = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            name,
+            passwordHash: null,
+          },
+        });
+      }
+
+      // If we got a refresh token, store/update the GoogleCalendarToken
+      if (tokens.refresh_token || tokens.access_token) {
+        await this.prisma.googleCalendarToken.upsert({
+          where: { userId: user.id },
+          create: {
+            userId: user.id,
+            accessToken: tokens.access_token ?? '',
+            refreshToken: tokens.refresh_token ?? '',
+            scope: tokens.scope ?? 'https://www.googleapis.com/auth/calendar.events',
+            tokenType: tokens.token_type ?? 'Bearer',
+            expiryDate: new Date(tokens.expiry_date ?? Date.now()),
+            googleEmail: email,
+          },
+          update: {
+            accessToken: tokens.access_token ?? '',
+            ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
+            ...(tokens.scope ? { scope: tokens.scope } : {}),
+            ...(tokens.token_type ? { tokenType: tokens.token_type } : {}),
+            ...(tokens.expiry_date ? { expiryDate: new Date(tokens.expiry_date) } : {}),
+            googleEmail: email,
+          },
+        });
+
+        // If they already have a professional profile, automatically set it as connected
+        const profile = await this.prisma.professionalProfile.findUnique({
+          where: { userId: user.id },
+        });
+        if (profile && !profile.googleCalendarConnected) {
+          await this.prisma.professionalProfile.update({
+            where: { id: profile.id },
+            data: {
+              googleCalendarConnected: true,
+              googleCalendarEmail: email,
+            },
+          });
+        }
+      }
+
+      const appTokens = await this.issueTokens(user);
+      return { user: toPublicUser(user), ...appTokens };
+    } catch (err) {
+      console.error('Google login error:', err);
+      throw new UnauthorizedException('Google authentication failed.');
+    }
   }
 
   async refresh(rawRefreshToken: string): Promise<TokenPair> {

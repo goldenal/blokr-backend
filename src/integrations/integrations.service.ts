@@ -23,7 +23,6 @@ export class IntegrationsService {
   private async getProfile(userId: string) {
     const profile = await this.prisma.professionalProfile.findUnique({
       where: { userId },
-      include: { googleCalendarToken: true },
     });
     if (!profile) {
       throw new NotFoundException('No professional profile for this account.');
@@ -44,9 +43,8 @@ export class IntegrationsService {
   }
 
   async getGoogleConnectUrl(userId: string): Promise<{ url: string }> {
-    const profile = await this.getProfile(userId);
     const state = await this.jwt.signAsync(
-      { professionalId: profile.id },
+      { userId },
       {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: STATE_TTL_SECONDS,
@@ -56,9 +54,9 @@ export class IntegrationsService {
   }
 
   async handleGoogleCallback(code: string, state: string): Promise<string> {
-    let payload: { professionalId: string };
+    let payload: { userId: string };
     try {
-      payload = await this.jwt.verifyAsync<{ professionalId: string }>(state, {
+      payload = await this.jwt.verifyAsync<{ userId: string }>(state, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
     } catch {
@@ -69,12 +67,12 @@ export class IntegrationsService {
 
     await this.prisma.$transaction([
       this.prisma.googleCalendarToken.upsert({
-        where: { professionalId: payload.professionalId },
-        create: { professionalId: payload.professionalId, ...tokens },
+        where: { userId: payload.userId },
+        create: { userId: payload.userId, ...tokens },
         update: tokens,
       }),
-      this.prisma.professionalProfile.update({
-        where: { id: payload.professionalId },
+      this.prisma.professionalProfile.updateMany({
+        where: { userId: payload.userId },
         data: {
           googleCalendarConnected: true,
           googleCalendarEmail: tokens.googleEmail,
@@ -93,7 +91,7 @@ export class IntegrationsService {
     const profile = await this.getProfile(userId);
     await this.prisma.$transaction([
       this.prisma.googleCalendarToken.deleteMany({
-        where: { professionalId: profile.id },
+        where: { userId },
       }),
       this.prisma.professionalProfile.update({
         where: { id: profile.id },

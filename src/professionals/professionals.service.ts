@@ -28,6 +28,10 @@ export class ProfessionalsService {
       );
     }
 
+    const googleToken = await this.prisma.googleCalendarToken.findUnique({
+      where: { userId },
+    });
+
     return this.prisma.professionalProfile.create({
       data: {
         userId,
@@ -41,6 +45,10 @@ export class ProfessionalsService {
         location: dto.location,
         phone: dto.phone,
         whatsappRemindersEnabled: dto.whatsappRemindersEnabled ?? true,
+        ...(googleToken ? {
+          googleCalendarConnected: true,
+          googleCalendarEmail: googleToken.googleEmail,
+        } : {}),
       },
     });
   }
