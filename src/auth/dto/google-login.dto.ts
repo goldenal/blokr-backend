@@ -5,5 +5,5 @@ export class GoogleLoginDto {
   @ApiProperty({ description: 'The authorization code returned by Google OAuth popup' })
   @IsString()
   @IsNotEmpty()
-  code: string;
+  code!: string;
 }
