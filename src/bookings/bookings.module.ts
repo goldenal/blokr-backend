@@ -6,9 +6,10 @@ import { BookingsCleanupService } from './bookings-cleanup.service';
 import { PaystackService } from './paystack/paystack.service';
 import { PaystackWebhookController } from './paystack/paystack-webhook.controller';
 import { AvailabilityModule } from '../availability/availability.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Module({
-  imports: [AvailabilityModule],
+  imports: [AvailabilityModule, IntegrationsModule],
   controllers: [
     BookingsController,
     BookingsPublicController,

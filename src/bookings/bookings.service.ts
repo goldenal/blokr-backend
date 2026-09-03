@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  LocationType,
   PaymentChannel,
   PaymentStatus,
   Prisma,
@@ -15,11 +16,12 @@ import { randomInt, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { PaystackService } from './paystack/paystack.service';
+import { GoogleCalendarService } from '../integrations/google-calendar.service';
 import { CreateHoldDto } from './dto/create-hold.dto';
 import { koboToNaira } from '../common/constants/money';
 import { minutesToTime, timeToMinutes } from '../availability/slot-math';
 import { PaginationDto } from '../common/dto/pagination.dto';
-import type { Booking } from '@prisma/client';
+import type { Booking, ProfessionalProfile, Service } from '@prisma/client';
 
 const HOLD_DURATION_MS = 10 * 60 * 1000;
 const REFERENCE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -59,6 +61,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
     private readonly paystack: PaystackService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   async createHold(username: string, serviceId: string, dto: CreateHoldDto) {
@@ -237,7 +240,7 @@ export class BookingsService {
 
     const transaction = await this.prisma.paystackTransaction.findUnique({
       where: { reference: payload.data.reference },
-      include: { booking: true },
+      include: { booking: { include: { professional: true, service: true } } },
     });
     if (!transaction) {
       return { received: true };
@@ -283,6 +286,8 @@ export class BookingsService {
             },
           }),
         ]);
+
+        await this.pushToGoogleCalendar(booking);
       }
     } else if (payload.event === 'charge.failed') {
       await this.prisma.paystackTransaction.update({
@@ -296,6 +301,30 @@ export class BookingsService {
     }
 
     return { received: true };
+  }
+
+  private async pushToGoogleCalendar(
+    booking: Booking & { professional: ProfessionalProfile; service: Service },
+  ): Promise<void> {
+    const event = await this.googleCalendar.createBookingEvent({
+      professionalUserId: booking.professional.userId,
+      summary: `${booking.service.name} with ${booking.customerName}`,
+      description: booking.customerNotes ?? undefined,
+      date: booking.date.toISOString().split('T')[0],
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      attendeeEmail: booking.customerEmail,
+      createMeetLink: booking.service.locationType === LocationType.GOOGLE_MEET,
+    });
+    if (!event) return;
+
+    await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        calendarEventId: event.eventId,
+        meetingLink: event.meetingLink,
+      },
+    });
   }
 
   private mapChannel(channel: string | undefined): PaymentChannel | undefined {

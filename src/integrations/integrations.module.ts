@@ -8,5 +8,6 @@ import { GoogleCalendarService } from './google-calendar.service';
   imports: [JwtModule.register({})],
   controllers: [IntegrationsController],
   providers: [IntegrationsService, GoogleCalendarService],
+  exports: [GoogleCalendarService],
 })
 export class IntegrationsModule {}
