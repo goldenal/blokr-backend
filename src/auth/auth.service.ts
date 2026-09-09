@@ -121,8 +121,13 @@ export class AuthService {
         });
       }
 
-      // If we got a refresh token, store/update the GoogleCalendarToken
-      if (tokens.refresh_token || tokens.access_token) {
+      // Only store/update the GoogleCalendarToken if the user actually granted calendar
+      // access on this login — the Google button no longer requests it by default, so an
+      // access token alone (always present) doesn't mean calendar access was granted.
+      const grantedCalendarScope = (tokens.scope ?? '').includes(
+        'https://www.googleapis.com/auth/calendar',
+      );
+      if (grantedCalendarScope) {
         await this.prisma.googleCalendarToken.upsert({
           where: { userId: user.id },
           create: {

@@ -4,7 +4,11 @@ import { google } from 'googleapis';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+];
 
 // The platform only operates in Nigeria today; ProfessionalProfile.timezone is a free-text
 // display string (e.g. "Africa/Lagos (WAT)"), not a valid IANA zone, so it can't be passed
