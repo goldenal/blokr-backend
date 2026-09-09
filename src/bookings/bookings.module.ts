@@ -1,3 +1,4 @@
+import { MailModule } from '../mail/mail.module';
 import { Module } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
@@ -9,7 +10,7 @@ import { AvailabilityModule } from '../availability/availability.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Module({
-  imports: [AvailabilityModule, IntegrationsModule],
+  imports: [AvailabilityModule, IntegrationsModule, MailModule],
   controllers: [
     BookingsController,
     BookingsPublicController,

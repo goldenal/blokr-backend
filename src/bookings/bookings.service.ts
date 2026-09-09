@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { randomInt, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { PaystackService } from './paystack/paystack.service';
 import { GoogleCalendarService } from '../integrations/google-calendar.service';
@@ -62,6 +63,7 @@ export class BookingsService {
     private readonly availability: AvailabilityService,
     private readonly paystack: PaystackService,
     private readonly googleCalendar: GoogleCalendarService,
+    private readonly mail: MailService,
   ) {}
 
   async createHold(username: string, serviceId: string, dto: CreateHoldDto) {
@@ -288,6 +290,7 @@ export class BookingsService {
         ]);
 
         await this.pushToGoogleCalendar(booking);
+        await this.mail.sendBookingConfirmation(booking.id);
       }
     } else if (payload.event === 'charge.failed') {
       await this.prisma.paystackTransaction.update({
@@ -400,6 +403,9 @@ export class BookingsService {
       where: { id },
       data: { status: BookingStatus.CANCELLED },
     });
+    
+    await this.mail.sendCancellation(id);
+    
     return toBookingResponse(updated);
   }
 }
