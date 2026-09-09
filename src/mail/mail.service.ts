@@ -27,7 +27,7 @@ export class MailService {
       const timeStr = `${booking.startTime} - ${booking.endTime}`;
 
       // 1. Email to Customer
-      await this.resend.emails.send({
+      const customerResult = await this.resend.emails.send({
         from: 'Blokr <info@useblokr.com>',
         to: booking.customerEmail,
         subject: `Booking Confirmed: ${booking.service.name}`,
@@ -41,9 +41,15 @@ export class MailService {
           <p>Thank you for using Blokr!</p>
         `,
       });
+      if (customerResult.error) {
+        this.logger.error(
+          `Failed to send confirmation email to customer for booking ${bookingId}`,
+          customerResult.error,
+        );
+      }
 
       // 2. Email to Professional
-      await this.resend.emails.send({
+      const professionalResult = await this.resend.emails.send({
         from: 'Blokr <info@useblokr.com>',
         to: booking.professional.user.email,
         subject: `New Booking: ${booking.service.name}`,
@@ -58,8 +64,16 @@ export class MailService {
           <p>Please check your calendar for details.</p>
         `,
       });
-      
-      this.logger.log(`Confirmation emails sent for booking ${bookingId}`);
+      if (professionalResult.error) {
+        this.logger.error(
+          `Failed to send confirmation email to professional for booking ${bookingId}`,
+          professionalResult.error,
+        );
+      }
+
+      if (!customerResult.error && !professionalResult.error) {
+        this.logger.log(`Confirmation emails sent for booking ${bookingId}`);
+      }
     } catch (error) {
       this.logger.error(`Failed to send emails for booking ${bookingId}`, error);
     }
@@ -79,7 +93,7 @@ export class MailService {
 
       const dateStr = booking.date.toISOString().split('T')[0];
 
-      await this.resend.emails.send({
+      const result = await this.resend.emails.send({
         from: 'Blokr <info@useblokr.com>',
         to: booking.customerEmail,
         subject: `Booking Cancelled: ${booking.service.name}`,
@@ -92,6 +106,13 @@ export class MailService {
         `,
       });
 
+      if (result.error) {
+        this.logger.error(
+          `Failed to send cancellation email for booking ${bookingId}`,
+          result.error,
+        );
+        return;
+      }
       this.logger.log(`Cancellation email sent for booking ${bookingId}`);
     } catch (error) {
       this.logger.error(`Failed to send cancellation email for booking ${bookingId}`, error);
@@ -102,7 +123,7 @@ export class MailService {
     try {
       const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
 
-      await this.resend.emails.send({
+      const result = await this.resend.emails.send({
         from: 'Blokr <info@useblokr.com>',
         to: email,
         subject: 'Reset your Blokr password',
@@ -116,9 +137,40 @@ export class MailService {
         `,
       });
 
+      if (result.error) {
+        this.logger.error(
+          `Failed to send password reset email to ${email}`,
+          result.error,
+        );
+        return;
+      }
       this.logger.log(`Password reset email sent to ${email}`);
     } catch (error) {
       this.logger.error(`Failed to send password reset email to ${email}`, error);
+    }
+  }
+
+  async sendSpecialInquiryEmail(inquiry: any) {
+    try {
+      await this.resend.emails.send({
+        from: 'Blokr <info@useblokr.com>',
+        to: inquiry.professional.user.email,
+        subject: `Special Inquiry from ${inquiry.customerName}`,
+        html: `
+          <h1>New Special Inquiry</h1>
+          <p>Hi ${inquiry.professional.name},</p>
+          <p>You have received a special inquiry from <strong>${inquiry.customerName}</strong>.</p>
+          <p><strong>Email:</strong> ${inquiry.customerEmail}</p>
+          <p><strong>Phone:</strong> ${inquiry.customerPhone || 'Not provided'}</p>
+          <p><strong>Message:</strong></p>
+          <blockquote style="border-left: 4px solid #ccc; padding-left: 10px;">${inquiry.message}</blockquote>
+          <p>Please reply directly to their email address to discuss their requirements.</p>
+        `,
+      });
+
+      this.logger.log(`Special inquiry email sent to ${inquiry.professional.user.email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send special inquiry email`, error);
     }
   }
 }

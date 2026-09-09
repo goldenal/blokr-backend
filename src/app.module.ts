@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { MailModule } from './mail/mail.module';
+import { InquiriesModule } from './inquiries/inquiries.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { MailModule } from './mail/mail.module';
     IntegrationsModule,
     HealthModule,
     MailModule,
+    InquiriesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

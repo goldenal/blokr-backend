@@ -136,9 +136,15 @@ model ProfessionalProfile {
   availabilityRules     AvailabilityRule[]
   availabilityOverrides AvailabilityOverride[]
   bookings              Booking[]
+  inquiries             Inquiry[]
 
   @@index([userId])
   @@map("professional_profiles")
+}
+
+enum PricingType {
+  FIXED
+  VARIABLE
 }
 
 model Service {
@@ -149,6 +155,10 @@ model Service {
   description         String?
   durationMinutes     Int
   priceKobo           Int
+  pricingType         PricingType  @default(FIXED)
+  variableName        String?
+  minVariable         Int?         @default(1)
+  maxVariable         Int?         @default(10)
   currency            String       @default("NGN")
   bufferMinutes       Int          @default(0)
   locationType        LocationType
@@ -207,6 +217,7 @@ model Booking {
   customerEmail   String
   customerPhone   String
   customerNotes   String?
+  quantity        Int           @default(1)
   date            DateTime      @db.Date
   startTime       String
   endTime         String
@@ -262,4 +273,18 @@ model GoogleCalendarToken {
   updatedAt      DateTime @updatedAt
 
   @@map("google_calendar_tokens")
+}
+
+model Inquiry {
+  id                 String   @id @default(uuid())
+  professionalId     String
+  professional       ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  customerName       String
+  customerEmail      String
+  customerPhone      String?
+  message            String   @db.Text
+  createdAt          DateTime @default(now())
+
+  @@index([professionalId])
+  @@map("inquiries")
 }

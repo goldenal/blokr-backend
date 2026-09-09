@@ -80,13 +80,29 @@ export class BookingsService {
     const startMinutes = timeToMinutes(dto.startTime);
     const endTime = minutesToTime(startMinutes + service.durationMinutes);
 
+    const quantity = dto.quantity ?? 1;
+    if (service.pricingType === 'VARIABLE') {
+      const min = service.minVariable ?? 1;
+      const max = service.maxVariable ?? 10;
+      if (quantity < min || quantity > max) {
+        throw new ConflictException(`Quantity must be between ${min} and ${max}`);
+      }
+    } else {
+      if (quantity !== 1) {
+        throw new ConflictException('Quantity cannot be set for a FIXED price service.');
+      }
+    }
+
+    const amountKobo = service.priceKobo * quantity;
+
     const booking = await this.attemptHold(
       profile.id,
       service.id,
       dto,
       endTime,
-      service.priceKobo,
+      amountKobo,
       true,
+      quantity,
     );
     return {
       booking: toBookingResponse(booking),
@@ -109,6 +125,7 @@ export class BookingsService {
     endTime: string,
     amountKobo: number,
     allowRetry: boolean,
+    quantity: number,
   ): Promise<Booking> {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -132,6 +149,7 @@ export class BookingsService {
             customerEmail: dto.customerEmail,
             customerPhone: dto.customerPhone,
             customerNotes: dto.customerNotes,
+            quantity,
             date: new Date(dto.date),
             startTime: dto.startTime,
             endTime,
@@ -160,6 +178,7 @@ export class BookingsService {
             endTime,
             amountKobo,
             false,
+            quantity,
           );
         }
         throw new ConflictException(

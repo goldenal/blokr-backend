@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LocationType } from '@prisma/client';
+import { LocationType, PricingType } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
@@ -51,4 +51,26 @@ export class CreateServiceDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ enum: PricingType })
+  @IsOptional()
+  @IsEnum(PricingType)
+  pricingType?: PricingType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  variableName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  minVariable?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  maxVariable?: number;
 }

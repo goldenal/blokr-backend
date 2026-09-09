@@ -46,6 +46,10 @@ export class ServicesService {
         locationType: dto.locationType,
         meetingInstructions: dto.meetingInstructions,
         isActive: dto.isActive ?? true,
+        pricingType: dto.pricingType,
+        variableName: dto.variableName,
+        minVariable: dto.minVariable,
+        maxVariable: dto.maxVariable,
       },
     });
     return toResponse(service);

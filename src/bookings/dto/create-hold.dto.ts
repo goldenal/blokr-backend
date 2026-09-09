@@ -36,4 +36,8 @@ export class CreateHoldDto {
   @IsOptional()
   @IsString()
   customerNotes?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  quantity?: number;
 }
