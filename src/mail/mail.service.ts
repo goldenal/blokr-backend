@@ -97,4 +97,28 @@ export class MailService {
       this.logger.error(`Failed to send cancellation email for booking ${bookingId}`, error);
     }
   }
+
+  async sendPasswordReset(email: string, token: string, frontendUrl: string) {
+    try {
+      const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
+
+      await this.resend.emails.send({
+        from: 'Blokr <info@useblokr.com>',
+        to: email,
+        subject: 'Reset your Blokr password',
+        html: `
+          <h1>Password Reset</h1>
+          <p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
+          <p>Click the link below to set a new password:</p>
+          <p><a href="${resetLink}">Reset Password</a></p>
+          <p>This link will expire in 1 hour.</p>
+          <p>Thank you.</p>
+        `,
+      });
+
+      this.logger.log(`Password reset email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password reset email to ${email}`, error);
+    }
+  }
 }

@@ -73,14 +73,16 @@ enum PaymentChannel {
 // ---------- Identity ----------
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String?
-  name         String
-  phone        String?
-  role         Role     @default(PROFESSIONAL)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                     String   @id @default(uuid())
+  email                  String   @unique
+  passwordHash           String?
+  name                   String
+  phone                  String?
+  role                   Role     @default(PROFESSIONAL)
+  resetPasswordToken     String?  @unique
+  resetPasswordExpiresAt DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   professionalProfile ProfessionalProfile?
   refreshTokens       RefreshToken[]
